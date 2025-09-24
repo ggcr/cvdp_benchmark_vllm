@@ -1,0 +1,25 @@
+Bootstrap: docker
+From: hdlc/sim:osvb
+
+%post
+    apt-get update
+    apt-get install -y --no-install-recommends curl ca-certificates python3-venv git
+    rm -rf /var/lib/apt/lists/*
+
+    # uv
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+
+    # venv
+    uv venv /opt/venv --python python3 --seed
+    uv pip install -p /opt/venv/bin/python packaging setuptools wheel ninja
+
+    # cvdp deps
+    git clone --depth 1 https://github.com/NVlabs/cvdp_benchmark
+    uv pip install -p /opt/venv/bin/python -r ./cvdp_benchmark/requirements.txt
+    uv pip install -p /opt/venv/bin/python transformers datasets tokenizers
+    rm -rf ./cvdp_benchmark/
+
+%environment
+    export VIRTUAL_ENV=/opt/venv
+    export PATH=/opt/venv/bin:$PATH

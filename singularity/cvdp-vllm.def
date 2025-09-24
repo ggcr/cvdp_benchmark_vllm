@@ -1,0 +1,33 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:23.12-py3
+
+%post
+    set -euxo pipefail
+    export DEBIAN_FRONTEND=noninteractive
+
+    apt-get update
+    apt-get install -y --no-install-recommends curl ca-certificates python3-venv git
+    rm -rf /var/lib/apt/lists/*
+
+    # uv
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+
+    # venv
+    uv venv /opt/venv --python python3 --seed
+    uv pip install -p /opt/venv/bin/python packaging setuptools wheel ninja
+    uv pip install -p /opt/venv/bin/python awscli pydantic psutil
+
+    # cvdp deps
+    git clone --depth 1 https://github.com/NVlabs/cvdp_benchmark
+    uv pip install -p /opt/venv/bin/python -r ./cvdp_benchmark/requirements.txt
+    rm -rf ./cvdp_benchmark/
+
+    # inference stack
+    uv pip install -p /opt/venv/bin/python "torch==2.7.1"
+    uv pip install -p /opt/venv/bin/python --no-build-isolation vllm ray "click==8.2.1" transformers datasets tokenizers
+
+
+%environment
+    export VIRTUAL_ENV=/opt/venv
+    export PATH=/opt/venv/bin:$PATH
