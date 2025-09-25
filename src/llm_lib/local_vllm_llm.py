@@ -19,11 +19,11 @@ class vLLM_Instance:
 
     def __init__(
         self,
+        local_ip: str,
+        local_port: str,
+        model: str,
+        dataset: str,
         context: str = "You are a helpful assistant.",
-        local_ip=None,
-        local_port=None,
-        model=None,
-        dataset=None,
     ):
         self.context = context
         self.local_ip = local_ip
@@ -34,7 +34,7 @@ class vLLM_Instance:
         self.debug = False
         self.prompts = []
 
-        self.store_path = os.path.join(RESULTS_PATH, self.dataset, self.model)
+        self.store_path = os.path.join(RESULTS_PATH, self.dataset, self.model.split("/")[-1].replace("/", ""))
         os.makedirs(self.store_path, exist_ok=True)
         self.responses_path = os.path.join(self.store_path, "responses.jsonl")
 
@@ -84,7 +84,7 @@ class vLLM_Instance:
             resp = self.chat.completions.create(
                 model=self.model,
                 prompt=messages,
-                n=1,
+                n=1,  # I assume that the local_export of prompts already produces N prompts for each p_id
                 max_tokens=16384,
             )
 
@@ -121,9 +121,7 @@ def main():
     args = parser.parse_args()
 
     vllm_client = vLLM_Instance(
-        local_ip=args.local_ip,
-        local_port=args.local_port,
-        model=args.model,
+        local_ip=args.local_ip, local_port=args.local_port, model=args.model, dataset=args.dataset
     )
     vllm_client.import_prompts()
     vllm_client.batched_inference()
