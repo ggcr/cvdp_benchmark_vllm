@@ -11,9 +11,7 @@ import asyncio
 logging.basicConfig(level=logging.INFO)
 
 RETRY_CODES = [429, 502, 503, 504]
-RESULTS_PATH = "/gpfs/scratch/bsc70/hpai/storage/projects/heka/chips-design/cvdp/results/async/"
-
-# TODO(cristian): handle the reasoning CoT & only store the completion
+RESULTS_PATH = "/gpfs/scratch/bsc70/hpai/storage/projects/heka/chips-design/cvdp/results/"
 
 
 class vLLM_Instance:
@@ -117,7 +115,7 @@ class vLLM_Instance:
             resp = await self.async_chat.chat.completions.create(
                 model=self.model,
                 messages=conversation,
-                n=1,
+                n=1,  # this assumes that to create the N samples, we exported the prompts with N samples already!
                 max_tokens=8192,
             )
             completion_text = resp.choices[0].message.content
@@ -143,44 +141,6 @@ class vLLM_Instance:
         for record, completion in results:
             record["completion"] = completion
 
-    def batched_inference(self) -> None:
-        """Query the model with a given batch size (batch_outputs) and store the responses"""
-        tokenizer = AutoTokenizer.from_pretrained(self.model, trust_remote_code=True)
-        messages = []
-
-        # Apply chat templates
-        for record in tqdm(self.prompts, desc="Applying chat templates..."):
-            conversation = self.parse_prompt_into_conversation(
-                record["prompt"], problem_id=record.get("id", "unknown")
-            )
-            formatted_prompt = tokenizer.apply_chat_template(
-                conversation, tokenize=False, add_generation_prompt=True
-            )
-            messages.append(formatted_prompt)
-
-        # Batch all requests through `completions`
-        try:
-            # Flush!
-            resp = self.chat.completions.create(
-                model=self.model,
-                prompt=messages,
-                n=1,  # I assume that the local_export of prompts already produces N prompts for each p_id
-                max_tokens=8192,
-            )
-
-            if len(resp.choices) != len(self.prompts):
-                logging.warning(
-                    f"Mismatch. Got {len(resp.choices)} responses for {len(self.prompts)} prompts"
-                )
-
-            for choice in tqdm(resp.choices, desc="Processing responses..."):
-                prompt_index = choice.index
-                completion_text = choice.text
-                self.prompts[prompt_index]["completion"] = completion_text
-
-        except Exception as e:
-            logging.error("Batched completions failed: %s", e)
-
     def store_responses(self):
         """Store the responses JSONL file on the results dir"""
         logging.info(f"Storing {len(self.prompts)} responses to {self.responses_path}")
@@ -205,13 +165,7 @@ def main():
     )
     vllm_client.import_prompts()
 
-    # Completions API infernece (batched)
-    # vllm_client.batched_inference()
-
-    # Chat API inference (serquential)
-    # vllm_client.chat_inference()
-
-    # Chat API inference (async)
+    # Chat API inference
     asyncio.run(vllm_client.async_chat_inference())
 
     vllm_client.store_responses()
